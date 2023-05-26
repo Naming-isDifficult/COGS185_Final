@@ -5,15 +5,20 @@ import torch.nn as nn
   A typical convolutional layer
 '''
 class ConvLayer(nn.Module):
-    def __init__(self, input_ch, output_ch, kernel_size, batch_norm=True):
+    def __init__(self, input_ch, output_ch, kernel_size,\
+                 stride=1, batch_norm=True):
         super(ConvLayer, self).__init__()
 
         #remove bais term if batch_norm is applied
         use_bias = not batch_norm
 
+        #calculate padding size
+        padding = (kernel_size - 1) // 2
+
         #initialize all layers
         self.conv = nn.Conv2d(input_ch, output_ch, kernel_size,\
-                              padding='same', bias=use_bias)
+                              stride=stride, padding=padding,\
+                              bias=use_bias)
         self.bn = None
         if batch_norm:
             self.bn = nn.BatchNorm2d(output_ch)
@@ -49,7 +54,7 @@ class ConvLayer(nn.Module):
 '''
 class SeparatedConv(nn.Module):
     def __init__(self, input_ch, output_ch, kernel_size,\
-                 batch_norm=True, height_first=True):
+                 stride=1, batch_norm=True, height_first=True):
         super(SeparatedConv, self).__init__()
 
         #remove bais term if batch_norm is applied
@@ -69,9 +74,22 @@ class SeparatedConv(nn.Module):
         second_kernel = (1, kernel_width) if height_first\
                             else (kernel_height, 1)
 
+        #obtain stride
+        first_stride = (stride, 1) if height_first\
+                            else (1, stride)
+        second_stride = (1, stride) if height_first\
+                            else (stride, 1)
+
+        #obtain padding
+        first_padding = ((kernel_height-1)//2, 0) if height_first\
+                            else (0, (kernel_width-1)//2)
+        second_padding = (0, (kernel_width-1)//2) if height_first\
+                            else ((kernel_height-1)//2, 0)
+
         #initialize first conv layers
         self.conv1 = nn.Conv2d(input_ch, output_ch, first_kernel,\
-                              padding='same', bias=use_bias)
+                               stride=first_stride, padding=first_padding,\
+                               bias=use_bias)
         self.bn1 = None
         if batch_norm:
             self.bn1 = nn.BatchNorm2d(output_ch)
@@ -79,7 +97,8 @@ class SeparatedConv(nn.Module):
 
         #initialze second conv layers
         self.conv2 = nn.Conv2d(output_ch, output_ch, second_kernel,\
-                               padding='same', bias=use_bias)
+                               stride=second_stride ,padding=second_padding,\
+                               bias=use_bias)
         self.bn2 = None
         if batch_norm:
             self.bn2 = nn.BatchNorm2d(output_ch)
@@ -117,16 +136,17 @@ class SeparatedConv(nn.Module):
   The output of this layer should be the sum of the output from both path.
 '''
 class DuplicatedSeparatedConv(nn.Module):
-    def __init__(self, input_ch, output_ch, kernel_size, batch_norm=True):
+    def __init__(self, input_ch, output_ch, kernel_size,\
+                 stride=1, batch_norm=True):
         super(DuplicatedSeparatedConv, self).__init__()
 
         #initialize both paths
-        self.left_path = SeparatedConv(input_ch, output_ch,\
-                                       kernel_size,batch_norm=batch_norm,\
+        self.left_path = SeparatedConv(input_ch, output_ch, kernel_size,\
+                                       stride, batch_norm=batch_norm,\
                                        height_first=True)
-        self.right_path = SeparatedConv(input_ch, output_ch,\
-                                       kernel_size,batch_norm=batch_norm,\
-                                       height_first=False)
+        self.right_path = SeparatedConv(input_ch, output_ch, kernel_size,\
+                                        stride, batch_norm=batch_norm,\
+                                        height_first=False)
 
     def forward(self, x):
         out_left = self.left_path(x)
