@@ -2,6 +2,7 @@ import torch
 import os
 import datetime
 from tqdm import tqdm
+from torch.utils.tensorboard import SummaryWriter
 
 class Trainer:
     def __init__(self, model, type, dataloader, epoch, lr=0.001):
@@ -46,11 +47,35 @@ class Trainer:
         no_improvement_count = 0
         validation_start_idx = len(self.dataloader) * (1-validation)
         best_val_score = 0
+        train_time = 0
+        writer = SummaryWriter(log_folder)
 
+        #output graph if needed
+        if self.current_epoch == 0:
+            data, target = next(iter(self.dataloader))
+            data = data.to(self.device)
+            writer.add_graph(self.model, data)
+
+        #warming process
+        print('Warming up...')
+        ######
+        # Credit to Amnon Geifman for the timing method
+        # https://towardsdatascience.com/the-correct-way-to-measure-inference-time-of-deep-neural-networks-304a54e5187f
+        ######
+        with torch.no_grad():
+            for batch_idx, (data, target) in enumerate(tqdm(self.dataloader)):
+                if batch_idx < min(100, len(self.dataloader)):
+                    data = data.to(self.device)
+                    _ = self.model(data)
+                else:
+                    break
+
+        #training process
+        print('Start training')
         while self.current_epoch < self.target_epoch:
             #initialize step, loss list (to compute avg epoch loss)
             #and val list (for validation)
-            step = 0
+            epoch_time = 0
             loss_list = []
             val_list = []
 
@@ -60,12 +85,32 @@ class Trainer:
                 target = target.to(self.device)
 
                 if batch_idx < validation_start_idx:
+            ######
+            # Credit to Amnon Geifman for the timing method
+            # https://towardsdatascience.com/the-correct-way-to-measure-inference-time-of-deep-neural-networks-304a54e5187f
+            ######
+                    start_event = torch.cuda.Event(enable_timing=True)
+                    end_event = torch.cuda.Event(enable_timing=True)
+                    
+                    #start timer
+                    start_event.record()
+
                     #trainning
                     self.optimizer.zero_grad()
                     out = self.model(data)
                     loss = self.loss(out, target)
                     loss.backward()
                     self.optimizer.step()
+
+                    #end timer
+                    end_event.record()
+
+                    #synchronize process
+                    torch.cuda.synchronize()
+
+                    #record time
+                    epoch_time = epoch_time +\
+                            start_event.elapsed_time(end_event) / 1000
 
                     #append loss
                     loss_list.append(loss.detach().cpu().item())
@@ -89,6 +134,9 @@ class Trainer:
             temp = torch.cat(val_list)
             val_score = torch.sum(temp) / temp.shape[0]
             val_score = val_score.detach().cpu().item()
+
+            #update trainning time
+            train_time = train_time + epoch_time
 
             #print information
             print('Epoch: {epoch}, Loss: {curr_loss}, Val: {curr_val}%'.format(
@@ -117,23 +165,18 @@ class Trainer:
                 self.save_checkpoint(checkpoint_folder, max_checkpoints,\
                                      round(avg_loss, 4))
 
+            #log values
+            writer.add_scalar('loss', avg_loss, self.current_epoch)
+            writer.add_scalar('validation', 100*val_score, self.current_epoch)
+            writer.add_scalar('training time per epoch',\
+                                epoch_time, self.current_epoch)
+            writer.add_scalar('total trainning time',\
+                                train_time, self.current_epoch)
+
             #finalize an epoch
             self.current_epoch = self.current_epoch + 1
             if torch.cuda.is_available():
                 torch.cuda.empty_cache()
-
-        '''
-            #######     #####              #####       #####
-               #       #     #             #    #     #     #
-               #      #       #    ####    #     #   #       #
-               #       #     #             #    #     #     #
-               #        #####              #####       #####
-
-            Tensorboard logging
-            Time elapsed
-        '''
-
-
 
     def get_default_folder(self, type):
         '''

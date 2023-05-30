@@ -148,10 +148,25 @@ class DuplicatedSeparatedConv(nn.Module):
                                         stride, batch_norm=batch_norm,\
                                         height_first=False)
 
+        #final activation
+        self.relu = nn.ReLU()
+
     def forward(self, x):
-        out_left = self.left_path(x)
-        out_right = self.right_path(x)
+        '''
+          x will be a 2-tuple
+          The first element will be the input
+          The second element indicates using activation
+          at the end or not.
+        '''
+        input = x[0]
+        final_activation = x[1]
+        
+        out_left = self.left_path((input, False))
+        out_right = self.right_path((input, False))
 
-        return out_left+out_right
+        out = out_left + out_right
+        out = self.relu(out) if final_activation\
+                    else out
 
+        return out
         
