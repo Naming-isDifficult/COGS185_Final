@@ -56,22 +56,20 @@ class Trainer:
             data = data.to(self.device)
             writer.add_graph(self.model, data)
 
-        #warming process
-        print('Warming up...')
         ######
         # Credit to Amnon Geifman for the timing method
         # https://towardsdatascience.com/the-correct-way-to-measure-inference-time-of-deep-neural-networks-304a54e5187f
         ######
+
+        #warming process
+        print('Warming up...')
         with torch.no_grad():
             for batch_idx, (data, target) in enumerate(tqdm(self.dataloader)):
-                if batch_idx < min(100, len(self.dataloader)):
-                    data = data.to(self.device)
-                    _ = self.model(data)
-                else:
-                    break
+                data = data.to(self.device)
+                _ = self.model(data)
 
         #training process
-        print('Start training')
+        print('Start training...')
         while self.current_epoch < self.target_epoch:
             #initialize step, loss list (to compute avg epoch loss)
             #and val list (for validation)
@@ -85,10 +83,6 @@ class Trainer:
                 target = target.to(self.device)
 
                 if batch_idx < validation_start_idx:
-            ######
-            # Credit to Amnon Geifman for the timing method
-            # https://towardsdatascience.com/the-correct-way-to-measure-inference-time-of-deep-neural-networks-304a54e5187f
-            ######
                     start_event = torch.cuda.Event(enable_timing=True)
                     end_event = torch.cuda.Event(enable_timing=True)
                     
