@@ -13,6 +13,7 @@ class Trainer:
         self.dataloader = dataloader
         self.current_epoch = 0
         self.target_epoch = epoch
+        self.train_time = 0
 
         #find available device
         self.device = None
@@ -33,6 +34,7 @@ class Trainer:
         checkpoint = torch.load(path_to_checkpoint)
 
         self.current_epoch = checkpoint['epoch'] + 1
+        self.train_time = checkpoint['time']
         self.model.load_state_dict(checkpoint['model'])
         self.optimizer.load_state_dict(checkpoint['optimizer'])
 
@@ -47,7 +49,6 @@ class Trainer:
         no_improvement_count = 0
         validation_start_idx = len(self.dataloader) * (1-validation)
         best_val_score = 0
-        train_time = 0
         writer = SummaryWriter(log_folder)
 
         #output graph if needed
@@ -130,7 +131,7 @@ class Trainer:
             val_score = val_score.detach().cpu().item()
 
             #update trainning time
-            train_time = train_time + epoch_time
+            self.train_time = self.train_time + epoch_time
 
             #print information
             print('Epoch: {epoch}, Loss: {curr_loss}, Val: {curr_val}%'.format(
@@ -165,7 +166,7 @@ class Trainer:
             writer.add_scalar('training time per epoch',\
                                 epoch_time, self.current_epoch)
             writer.add_scalar('total trainning time',\
-                                train_time, self.current_epoch)
+                                self.train_time, self.current_epoch)
 
             #finalize an epoch
             self.current_epoch = self.current_epoch + 1
@@ -208,6 +209,7 @@ class Trainer:
         #generate checkpoint
         checkpoint = {
             'epoch': self.current_epoch,
+            'time': self.train_time,
             'model': self.model.state_dict(),
             'optimizer': self.optimizer.state_dict()
         }
