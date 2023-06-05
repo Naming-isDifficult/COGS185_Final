@@ -173,6 +173,8 @@ class Trainer:
             if torch.cuda.is_available():
                 torch.cuda.empty_cache()
 
+        writer.close()
+
     def get_default_folder(self, type):
         '''
           A bit confusing here...

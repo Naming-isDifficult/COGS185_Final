@@ -41,9 +41,19 @@ class Tester:
         #warming process
         print('Warming up...')
         with torch.no_grad():
+            acc_list = []
             for batch_idx, (data, target) in enumerate(tqdm(self.dataloader)):
                 data = data.to(self.device)
-                _ = self.model(data)
+                target = target.to(self.device)
+                out = self.model(data)
+                out = torch.argmax(out, dim=1)
+                target = torch.argmax(target, dim=1)
+                acc_list.append(out==target)
+
+            temp = torch.cat(acc_list)
+            accuracy = torch.sum(temp) / temp.shape[0]
+            accuracy = accuracy.detach().cpu().item()
+            writer.add_scalar('accuracy', 100*accuracy)
 
         #testing
         print('Testing...')
@@ -67,8 +77,10 @@ class Tester:
                 
                 inference_time = inference_time + epoch_time
 
-                writer.add_scalar('time per epoch', epoch_time)
-                writer.add_scalar('total time', epoch_time)
+                writer.add_scalar('time per epoch', epoch_time, i)
+                writer.add_scalar('total time', inference_time, i)
+
+        writer.close()
 
     def get_default_folder(self, type):
         '''
